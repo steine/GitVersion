@@ -399,5 +399,151 @@ namespace GitVersion.Core.Tests.IntegrationTests
             fixture.Repository.Branches.Remove(HotfixBranch);
             fixture.AssertFullSemver("1.2.0-alpha.19", config);
         }
+
+        [Test]
+        public void WhenUsingGitFlow_AndCreatingAReleaseBranch_ThenDevelopMinorNumberShouldIncrease()
+        {
+            const string DevelopBranch = "develop";
+            const string ReleaseBranch = "release/1.1.0";
+
+            using var fixture = new BaseGitFlowRepositoryFixture("1.0.0");
+            fixture.AssertFullSemver("1.1.0-alpha.1");
+
+            // GitFlow Release start
+            fixture.BranchTo(ReleaseBranch);
+            fixture.AssertFullSemver("1.1.0-beta.1+0");
+            
+            // Develop should see increment on minor
+            fixture.Checkout(DevelopBranch);
+            fixture.AssertFullSemver("1.2.0-alpha.0");
+        }
+
+        [Test]
+        public void WhenUsingGitFlow_AndCommitToDevelopDuringActiveReleaseBranch_AndFinishesRelease_ThenDevelopPreReleaseNumberShouldIncrease()
+        {
+            const string DevelopBranch = "develop";
+            const string ReleaseBranch = "release/1.1.0";
+
+            using var fixture = new BaseGitFlowRepositoryFixture("1.0.0");
+            fixture.AssertFullSemver("1.1.0-alpha.1");
+
+            // GitFlow Release start
+            fixture.BranchTo(ReleaseBranch);
+            fixture.AssertFullSemver("1.1.0-beta.1+0");
+
+            // Release Fix 
+            fixture.Checkout(ReleaseBranch);
+            fixture.Repository.MakeACommit();
+            fixture.AssertFullSemver("1.1.0-beta.1+1");
+
+            // Develop diverges with commits
+            fixture.Checkout(DevelopBranch);
+            fixture.Repository.MakeACommit();
+            fixture.AssertFullSemver("1.2.0-alpha.1");
+            fixture.Repository.MakeCommits(5);
+            fixture.AssertFullSemver("1.2.0-alpha.6");
+
+            // GitFlow Release Finish
+            fixture.Checkout(MainBranch);
+            fixture.MergeNoFF(ReleaseBranch);
+            fixture.ApplyTag("1.1.0");
+            fixture.Checkout(DevelopBranch);
+            fixture.MergeNoFF(ReleaseBranch);
+
+            // Develop old PreReleaseNumber 6 + 1 MergeNoFF commit + 1 Release PreReleaseNumber
+            fixture.AssertFullSemver("1.2.0-alpha.8");
+        }
+
+        [Test]
+        public void WhenUsingGitFlow_AndCommitToDevelopDuringActiveReleaseBranch_AndMergeBackReleaseFixToDevelop_AndFinishesRelease_ThenDevelopPreReleaseNumberShouldIncrease()
+        {
+            const string DevelopBranch = "develop";
+            const string ReleaseBranch = "release/1.1.0";
+
+            using var fixture = new BaseGitFlowRepositoryFixture("1.0.0");
+            fixture.AssertFullSemver("1.1.0-alpha.1");
+
+            // GitFlow Release start
+            fixture.BranchTo(ReleaseBranch);
+            fixture.AssertFullSemver("1.1.0-beta.1+0");
+
+            // Release Fix which should go back to Develop
+            fixture.Checkout(ReleaseBranch);
+            fixture.Repository.MakeACommit();
+            fixture.AssertFullSemver("1.1.0-beta.1+1");
+
+            // Develop diverges with commits
+            fixture.Checkout(DevelopBranch);
+            fixture.Repository.MakeACommit();
+            fixture.AssertFullSemver("1.2.0-alpha.1");
+            fixture.Repository.MakeCommits(5);
+            fixture.AssertFullSemver("1.2.0-alpha.6");
+
+            // Merge-back Release Fix to Develop
+            fixture.Checkout(DevelopBranch);
+            fixture.MergeNoFF(ReleaseBranch);
+            fixture.AssertFullSemver("1.2.0-alpha.8");
+
+            // Release Fix 2 
+            fixture.Checkout(ReleaseBranch);
+            fixture.Repository.MakeACommit();
+            fixture.AssertFullSemver("1.1.0-beta.1+2");
+
+            // GitFlow Release Finish
+            fixture.Checkout(MainBranch);
+            fixture.MergeNoFF(ReleaseBranch);
+            fixture.ApplyTag("1.1.0");
+            fixture.Checkout(DevelopBranch);
+            fixture.MergeNoFF(ReleaseBranch);
+
+            // Develop old PreReleaseNumber 8 + 1 MergeNoFF commit + 1 Release PreReleaseNumber
+            fixture.AssertFullSemver("1.2.0-alpha.10");
+        }
+
+        [Test]
+        public void WhenUsingGitFlow_AndCommitToDevelopDuringActiveReleaseBranch_AndMergeUpDevelopToRelease_AndFinishesRelease_ThenDevelopPreReleaseNumberShouldIncrease()
+        {
+            const string DevelopBranch = "develop";
+            const string ReleaseBranch = "release/1.1.0";
+
+            using var fixture = new BaseGitFlowRepositoryFixture("1.0.0");
+            fixture.AssertFullSemver("1.1.0-alpha.1");
+
+            // GitFlow Release start
+            fixture.BranchTo(ReleaseBranch);
+            fixture.AssertFullSemver("1.1.0-beta.1+0");
+
+            // Release Fix
+            fixture.Checkout(ReleaseBranch);
+            fixture.Repository.MakeACommit();
+            fixture.AssertFullSemver("1.1.0-beta.1+1");
+
+            // Develop diverges with commits
+            fixture.Checkout(DevelopBranch);
+            fixture.Repository.MakeACommit();
+            fixture.AssertFullSemver("1.2.0-alpha.1");
+            fixture.Repository.MakeCommits(5);
+            fixture.AssertFullSemver("1.2.0-alpha.6");
+
+            // Merge-up Develop fixes to Release branch
+            fixture.Checkout(ReleaseBranch);
+            fixture.MergeNoFF(DevelopBranch);
+            fixture.AssertFullSemver("1.1.0-beta.1+2");
+
+            // Release Fix 2
+            fixture.Checkout(ReleaseBranch);
+            fixture.Repository.MakeACommit();
+            fixture.AssertFullSemver("1.1.0-beta.1+3");
+
+            // GitFlow Release Finish
+            fixture.Checkout(MainBranch);
+            fixture.MergeNoFF(ReleaseBranch);
+            fixture.ApplyTag("1.1.0");
+            fixture.Checkout(DevelopBranch);
+            fixture.MergeNoFF(ReleaseBranch);
+
+            // Develop old PreReleaseNumber 6 + 1 MergeNoFF commit + 1 Release PreReleaseNumber
+            fixture.AssertFullSemver("1.2.0-alpha.8");
+        }
     }
 }
